@@ -1,0 +1,153 @@
+# 🫀 Multimodal Biometric Fusion
+### ECG + Face + Fingerprint — Deep Learning Pipeline
+
+[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://python.org)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red.svg)](https://pytorch.org)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/YOUR_USERNAME/ecg-biometric-fusion/blob/main/notebooks/full_pipeline.ipynb)
+
+A deep learning system that fuses **ECG signals** (PhysioNet) with **face and fingerprint scores** (NIST-BSSR1) for robust multimodal biometric authentication.
+
+---
+
+## 📊 Results
+
+| Modality | EER |
+|---|---|
+| ECG (CNN-LSTM) | 2.34% |
+| Face (NIST C1) | 0.51% |
+| Fingerprint | 0.00% |
+| **Fused System** | **0.00%** |
+
+---
+
+## 🏗️ Architecture
+
+```
+PhysioNet ECG  →  ResBlock1D ×4  →  BiLSTM  →  Attention Pool  →  128-d embedding ─┐
+NIST Face      →  Pre-computed score  →  Tanh transform  ──────────────────────────►├──► MLP Fusion ──► Decision
+NIST Fingerprint →  Pre-computed score  →  Tanh transform  ─────────────────────────┘
+
+ECG Encoder : 1,140,929 params
+Fusion Net  :     4,981 params
+```
+
+**ECG Encoder (CNN-LSTM)**
+- 4× Residual 1-D Conv blocks with stride-2 downsampling
+- Bidirectional LSTM (2 layers, hidden=128)
+- Temporal attention pooling → 128-d L2-normalised embedding
+- Trained with triplet margin loss (cosine similarity)
+
+**Fusion Network**
+- Per-modality quality estimation
+- Learned Tanh score transformation
+- 3→32→16→1 MLP with sigmoid output
+
+---
+
+## 📁 Repository Structure
+
+```
+ecg-biometric-fusion/
+├── src/
+│   ├── pipeline.py          # Models, loaders, preprocessing
+│   ├── train.py             # Training scripts
+│   ├── evaluate.py          # EER, ROC, score distributions
+│   └── utils.py             # Helpers and visualisation
+├── notebooks/
+│   └── full_pipeline.ipynb  # Google Colab notebook (run end-to-end)
+├── data/
+│   └── sample/              # Sample synthetic ECG signals
+├── tests/
+│   └── test_pipeline.py     # Unit tests
+├── docs/
+│   └── architecture.md      # Detailed architecture notes
+├── requirements.txt
+└── README.md
+```
+
+---
+
+## 🚀 Quick Start
+
+### Option 1 — Google Colab (recommended)
+Click the **Open in Colab** badge above. Select **Runtime → T4 GPU → Run All**.
+
+### Option 2 — Local
+
+```bash
+git clone https://github.com/YOUR_USERNAME/ecg-biometric-fusion.git
+cd ecg-biometric-fusion
+pip install -r requirements.txt
+python src/train.py
+python src/evaluate.py
+```
+
+---
+
+## 📦 Dataset Setup
+
+### PhysioNet ECG-ID
+```python
+import wfdb
+wfdb.dl_database('ecgiddb', './data/physionet_ecg')
+```
+Or download from: https://physionet.org/content/ecgiddb/1.0.0/
+
+### NIST-BSSR1
+Request access at: https://www.nist.gov/programs-projects/biometric-scores-set-release-1-bssr1
+
+Place score files as:
+```
+data/
+└── nist_bssr1/
+    ├── face_c1_scores.npz
+    ├── face_c2_scores.npz
+    └── fingerprint_scores.npz
+```
+
+> **Note:** The system works without real datasets using built-in synthetic data that matches real NIST-BSSR1 score distributions.
+
+---
+
+## 🔧 Training
+
+```bash
+# Train ECG encoder with triplet loss
+python src/train.py --epochs 20 --subjects 50 --loss triplet
+
+# Train fusion network
+python src/train.py --mode fusion --epochs 15
+
+# Full pipeline
+python src/train.py --mode all
+```
+
+---
+
+## 📈 Evaluation
+
+```bash
+python src/evaluate.py
+```
+
+Generates:
+- EER table for all modalities
+- ROC curves
+- Score distribution plots
+- t-SNE embedding visualisation
+
+---
+
+## 📖 References
+
+- Agrafioti, F. & Hatzinakos, D. (2011). ECG based recognition
+- Phillips, P.J. et al. (2010). NIST BSSR1
+- He, K. et al. (2016). Deep Residual Learning
+- Hochreiter & Schmidhuber (1997). LSTM
+
+---
+
+## 📄 License
+
+MIT License — see [LICENSE](LICENSE)

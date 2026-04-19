@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pt
+*.pth
+*.egg-info/
+.env
+.venv
+venv/
+dist/
+build/
+.DS_Store
+*.ipynb_checkpoints/
+results/*.png
+results/*.csv
+data/physionet_ecg/
+data/nist_bssr1/
