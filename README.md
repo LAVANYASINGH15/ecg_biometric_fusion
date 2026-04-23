@@ -1,4 +1,4 @@
-[README.md](https://github.com/user-attachments/files/27021738/README.md)
+[README (1).md](https://github.com/user-attachments/files/27021822/README.1.md)
 # Multimodal Biometric Fusion
 ### ECG + Face + Fingerprint — Deep Learning Pipeline
 
@@ -7,8 +7,29 @@ A deep learning system that fuses ECG signals (PhysioNet) with face and fingerpr
 > **Published:** Lavanya Singh et al., *Early Glaucoma Screening Using YOLO and Deep Features from Fundus Images*, IEEE ISED 2025, NIT Raipur, pp. 475–480.
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/LAVANYASINGH15/ecg_biometric_fusion/blob/main/notebooks/full_pipeline.ipynb)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-BioFusion-00d4ff?style=flat)](https://lavanyasingh15.github.io/ecg_biometric_fusion/ecg_auth_system.html)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+---
+
+## Live Demo
+
+**[Try BioFusion →](https://lavanyasingh15.github.io/ecg_biometric_fusion/ecg_auth_system.html)**
+
+`ecg_auth_system.html` is a fully interactive, browser-based visualisation of the entire authentication pipeline. No setup, no installs — open it and run it.
+
+**What you can do in the demo:**
+
+- **Authenticate as a genuine user** — watch the system scan ECG, face, and fingerprint in sequence, compute a weighted fusion score, and grant access in real time
+- **Simulate an impostor** — trigger a failed authentication and see how the fusion layer catches it, with the fused score falling below the 0.55 decision threshold
+- **Switch subjects** — select from multiple enrolled identities (backed by PhysioNet ECG-ID data) and see how per-subject signal characteristics change
+- **Change modality combinations** — toggle between ECG only, ECG + Face, ECG + Fingerprint, or all three, and observe how EER shifts across configurations
+- **Switch fusion methods** — compare Balanced, ECG-Heavy, and Equal-weight fusion strategies live
+- **Watch the signal processing** — a real-time ECG waveform animates during acquisition, extracting 20 features (P/Q/R/S/T intervals, amplitudes, angles); face and fingerprint scanners visualise their own matching progress
+- **Read the decision log** — a live console streams every step: signal acquisition, feature extraction, per-modality scores, fusion computation, and the final grant/deny decision
+
+The demo uses synthetic score distributions calibrated to match real NIST-BSSR1 data, so the EER figures and decision behaviour reflect the actual trained model's performance characteristics.
 
 ---
 
@@ -66,6 +87,7 @@ ecg-biometric-fusion/
 │   └── test_pipeline.py     # Unit tests
 ├── docs/
 │   └── architecture.md      # Detailed architecture notes
+├── ecg_auth_system.html     # Interactive browser demo (no setup required)
 ├── requirements.txt
 └── README.md
 ```
@@ -74,11 +96,15 @@ ecg-biometric-fusion/
 
 ## Quick Start
 
-### Option 1 — Google Colab (recommended)
+### Option 1 — Live Demo (no setup)
+
+Open [`ecg_auth_system.html`](https://lavanyasingh15.github.io/ecg_biometric_fusion/ecg_auth_system.html) directly in any browser.
+
+### Option 2 — Google Colab
 
 Click the **Open in Colab** badge above. Select `Runtime → T4 GPU → Run All`.
 
-### Option 2 — Local
+### Option 3 — Local
 
 ```bash
 git clone https://github.com/LAVANYASINGH15/ecg_biometric_fusion.git
