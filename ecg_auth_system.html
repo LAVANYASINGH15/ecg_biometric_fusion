@@ -1,0 +1,1571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BioFusion — ECG Multibiometric Auth</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #050810;
+  --bg2: #0a0f1e;
+  --bg3: #0f1628;
+  --surface: rgba(255,255,255,0.04);
+  --border: rgba(255,255,255,0.08);
+  --border-glow: rgba(100,200,255,0.25);
+  --accent: #00d4ff;
+  --accent2: #7c5cfc;
+  --accent3: #00ff9d;
+  --danger: #ff4d6d;
+  --text: #e8f0ff;
+  --text2: rgba(232,240,255,0.5);
+  --text3: rgba(232,240,255,0.25);
+  --ecg-color: #00d4ff;
+  --font-display: 'Syne', sans-serif;
+  --font-mono: 'Space Mono', monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-display);
+  min-height: 100vh;
+  overflow-x: hidden;
+  cursor: none;
+}
+
+/* Custom cursor */
+#cursor {
+  width: 8px; height: 8px;
+  background: var(--accent);
+  border-radius: 50%;
+  position: fixed; top: 0; left: 0;
+  pointer-events: none; z-index: 9999;
+  transition: transform 0.1s;
+  mix-blend-mode: screen;
+}
+#cursor-ring {
+  width: 28px; height: 28px;
+  border: 1px solid rgba(0,212,255,0.4);
+  border-radius: 50%;
+  position: fixed; top: 0; left: 0;
+  pointer-events: none; z-index: 9998;
+  transition: transform 0.18s ease, width 0.2s, height 0.2s, opacity 0.2s;
+}
+
+/* Stars background */
+#starfield {
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 0;
+}
+
+/* Grid overlay */
+.grid-bg {
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+  pointer-events: none; z-index: 0;
+}
+
+/* Main layout */
+.app {
+  position: relative; z-index: 1;
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+  align-items: center;
+  padding: 0 24px 60px;
+}
+
+/* Header */
+.header {
+  width: 100%; max-width: 1100px;
+  padding: 32px 0 24px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+.logo {
+  font-family: var(--font-display);
+  font-weight: 800; font-size: 22px;
+  letter-spacing: -0.5px;
+  color: var(--text);
+}
+.logo span { color: var(--accent); }
+.header-meta {
+  font-family: var(--font-mono);
+  font-size: 10px; color: var(--text3);
+  letter-spacing: 2px; text-transform: uppercase;
+  display: flex; align-items: center; gap: 16px;
+}
+.status-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent3);
+  box-shadow: 0 0 8px var(--accent3);
+  animation: pulse-dot 2s infinite;
+}
+@keyframes pulse-dot { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
+/* Main auth container */
+.auth-shell {
+  width: 100%; max-width: 1100px;
+  margin-top: 40px;
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+/* Panel shared style */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  backdrop-filter: blur(20px);
+}
+.panel-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.panel-title {
+  font-family: var(--font-mono);
+  font-size: 10px; letter-spacing: 2px;
+  text-transform: uppercase; color: var(--text2);
+}
+.panel-badge {
+  font-family: var(--font-mono);
+  font-size: 9px; letter-spacing: 1px;
+  background: rgba(0,212,255,0.1);
+  border: 1px solid rgba(0,212,255,0.2);
+  color: var(--accent);
+  padding: 3px 8px; border-radius: 4px;
+  text-transform: uppercase;
+}
+
+/* LEFT: Biometric scanners */
+.scanners-panel { }
+.scanner-list { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+
+.scanner-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: border-color 0.4s, box-shadow 0.4s;
+  cursor: pointer;
+}
+.scanner-card.scanning {
+  border-color: var(--accent);
+  box-shadow: 0 0 20px rgba(0,212,255,0.15), inset 0 0 30px rgba(0,212,255,0.03);
+}
+.scanner-card.verified {
+  border-color: var(--accent3);
+  box-shadow: 0 0 20px rgba(0,255,157,0.15), inset 0 0 30px rgba(0,255,157,0.03);
+}
+.scanner-card.failed {
+  border-color: var(--danger);
+  box-shadow: 0 0 20px rgba(255,77,109,0.15);
+}
+
+.scanner-top {
+  padding: 14px 16px;
+  display: flex; align-items: center; gap: 12px;
+}
+.scanner-icon-wrap {
+  width: 44px; height: 44px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.4s;
+}
+.scanner-card.scanning .scanner-icon-wrap { background: rgba(0,212,255,0.1); border-color: rgba(0,212,255,0.3); }
+.scanner-card.verified .scanner-icon-wrap { background: rgba(0,255,157,0.1); border-color: rgba(0,255,157,0.3); }
+.scanner-icon-wrap svg { width: 22px; height: 22px; }
+
+.scanner-info { flex: 1; }
+.scanner-name { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+.scanner-sub { font-family: var(--font-mono); font-size: 10px; color: var(--text3); letter-spacing: 1px; }
+
+.scanner-status {
+  font-family: var(--font-mono); font-size: 10px;
+  padding: 4px 10px; border-radius: 20px;
+  letter-spacing: 1px; text-transform: uppercase;
+  background: rgba(255,255,255,0.05);
+  color: var(--text3);
+  transition: all 0.4s;
+}
+.scanner-card.scanning .scanner-status { background: rgba(0,212,255,0.15); color: var(--accent); }
+.scanner-card.verified .scanner-status { background: rgba(0,255,157,0.15); color: var(--accent3); }
+.scanner-card.failed .scanner-status { background: rgba(255,77,109,0.15); color: var(--danger); }
+
+/* Canvas areas inside scanners */
+.scanner-canvas-wrap {
+  height: 0; overflow: hidden;
+  transition: height 0.5s cubic-bezier(0.34,1.56,0.64,1);
+  position: relative;
+}
+.scanner-card.scanning .scanner-canvas-wrap,
+.scanner-card.verified .scanner-canvas-wrap { height: 90px; }
+
+.scanner-canvas-wrap canvas { width: 100%; height: 90px; display: block; }
+
+/* Fingerprint SVG area */
+.fp-scan-area {
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  height: 90px; overflow: hidden;
+}
+.fp-scan-line {
+  position: absolute;
+  left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  top: 0;
+  animation: fp-scan 1.8s ease-in-out infinite;
+  opacity: 0;
+}
+.scanner-card.scanning .fp-scan-line { opacity: 1; }
+@keyframes fp-scan { 0%{top:0;} 100%{top:90px;} }
+
+/* Face scan */
+.face-scan-area {
+  display: flex; align-items: center; justify-content: center;
+  height: 90px; overflow: hidden; padding: 10px;
+}
+
+/* Score bar inside scanner */
+.scanner-score-bar {
+  height: 3px;
+  background: rgba(255,255,255,0.06);
+  position: relative;
+  overflow: hidden;
+}
+.scanner-score-fill {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  width: 0%;
+  background: var(--accent);
+  transition: width 1.2s cubic-bezier(0.22,1,0.36,1);
+}
+.scanner-card.verified .scanner-score-fill { background: var(--accent3); }
+
+/* Weight indicator */
+.scanner-weight {
+  padding: 8px 16px;
+  display: flex; align-items: center; justify-content: space-between;
+  font-family: var(--font-mono); font-size: 10px;
+}
+.weight-label { color: var(--text3); letter-spacing: 1px; }
+.weight-val { color: var(--text2); }
+.weight-bar-bg {
+  flex: 1; height: 3px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 2px; margin: 0 10px;
+  overflow: hidden;
+}
+.weight-bar-fill {
+  height: 100%; border-radius: 2px;
+  background: var(--accent2);
+  transition: width 1s ease;
+}
+
+/* RIGHT: Main display */
+.main-panel { display: flex; flex-direction: column; gap: 20px; }
+
+/* ECG main display */
+.ecg-panel { }
+.ecg-wrap { padding: 0; position: relative; }
+#ecg-main { width: 100%; height: 160px; display: block; }
+.ecg-overlay {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 14px 20px; pointer-events: none;
+}
+.ecg-vitals {
+  display: flex; gap: 24px;
+}
+.vital {
+  display: flex; flex-direction: column; gap: 2px;
+}
+.vital-label {
+  font-family: var(--font-mono); font-size: 9px;
+  color: var(--text3); letter-spacing: 2px; text-transform: uppercase;
+}
+.vital-val {
+  font-family: var(--font-mono); font-size: 20px;
+  font-weight: 700; color: var(--accent);
+  text-shadow: 0 0 20px rgba(0,212,255,0.5);
+}
+.vital-unit { font-family: var(--font-mono); font-size: 9px; color: var(--text3); }
+
+/* Feature vector heatmap */
+.features-panel {}
+.features-grid {
+  padding: 16px 20px;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+.feat-cell {
+  height: 36px;
+  border-radius: 6px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 8px; letter-spacing: 0.5px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  transition: background 0.8s, border-color 0.8s;
+  position: relative; overflow: hidden;
+  cursor: default;
+}
+.feat-cell::after {
+  content: '';
+  position: absolute; inset: 0;
+  opacity: 0;
+  transition: opacity 0.8s;
+}
+.feat-name { color: var(--text3); z-index: 1; }
+.feat-val {
+  font-size: 10px; font-weight: 700;
+  color: var(--text2); z-index: 1;
+  transition: color 0.5s;
+}
+.feat-cell.lit { border-color: rgba(0,212,255,0.3); }
+.feat-cell.lit .feat-val { color: var(--accent); }
+.feat-cell.lit::after { opacity: 1; background: radial-gradient(circle, rgba(0,212,255,0.12) 0%, transparent 70%); }
+
+/* Fusion panel */
+.fusion-panel {}
+.fusion-body { padding: 20px; }
+.fusion-method-tabs {
+  display: flex; gap: 8px; margin-bottom: 20px;
+}
+.fmethod-tab {
+  flex: 1; padding: 8px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 1px; text-transform: uppercase;
+  color: var(--text3); text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.fmethod-tab.active {
+  background: rgba(124,92,252,0.15);
+  border-color: rgba(124,92,252,0.4);
+  color: var(--accent2);
+  box-shadow: 0 0 16px rgba(124,92,252,0.15);
+}
+
+/* Score dials */
+.score-dials {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 12px; margin-bottom: 20px;
+}
+.score-dial-wrap { text-align: center; }
+.score-dial-svg { width: 80px; height: 80px; margin: 0 auto; display: block; }
+.dial-label {
+  font-family: var(--font-mono); font-size: 9px;
+  color: var(--text3); letter-spacing: 1px;
+  text-transform: uppercase; margin-top: 6px;
+}
+.dial-score {
+  font-family: var(--font-mono); font-size: 13px;
+  font-weight: 700; color: var(--text2);
+  transition: color 0.5s;
+}
+.score-dial-wrap.high .dial-score { color: var(--accent3); }
+
+/* Fusion equation */
+.fusion-eq {
+  background: rgba(0,0,0,0.3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  font-family: var(--font-mono);
+  font-size: 11px; color: var(--text2);
+  margin-bottom: 16px;
+  line-height: 1.8;
+}
+.eq-var { color: var(--accent); }
+.eq-val { color: var(--accent2); font-weight: 700; }
+
+/* THE DECISION */
+.decision-zone {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: rgba(0,0,0,0.3);
+  transition: all 0.5s;
+}
+.decision-zone.access-granted {
+  border-color: var(--accent3);
+  box-shadow: 0 0 40px rgba(0,255,157,0.2), inset 0 0 60px rgba(0,255,157,0.05);
+}
+.decision-zone.access-denied {
+  border-color: var(--danger);
+  box-shadow: 0 0 40px rgba(255,77,109,0.2);
+}
+.decision-inner {
+  padding: 24px;
+  display: flex; align-items: center; gap: 20px;
+}
+.decision-icon {
+  width: 60px; height: 60px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  font-size: 28px;
+  background: rgba(255,255,255,0.05);
+  border: 2px solid var(--border);
+  transition: all 0.5s;
+}
+.access-granted .decision-icon {
+  background: rgba(0,255,157,0.15);
+  border-color: var(--accent3);
+  box-shadow: 0 0 30px rgba(0,255,157,0.3);
+}
+.access-denied .decision-icon {
+  background: rgba(255,77,109,0.15);
+  border-color: var(--danger);
+  box-shadow: 0 0 30px rgba(255,77,109,0.3);
+}
+.decision-text { flex: 1; }
+.decision-heading {
+  font-size: 22px; font-weight: 800;
+  letter-spacing: -0.5px;
+  color: var(--text);
+  transition: color 0.5s;
+}
+.access-granted .decision-heading { color: var(--accent3); }
+.access-denied .decision-heading { color: var(--danger); }
+.decision-sub {
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--text3); margin-top: 4px;
+  letter-spacing: 1px;
+}
+.decision-meta {
+  text-align: right;
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--text3);
+  line-height: 1.8;
+}
+.meta-eer { color: var(--accent); font-size: 13px; font-weight: 700; }
+
+/* Control panel bottom */
+.controls-row {
+  width: 100%; max-width: 1100px;
+  margin-top: 4px;
+  display: flex; align-items: center; gap: 12px;
+  flex-wrap: wrap;
+}
+.ctrl-btn {
+  padding: 12px 28px;
+  border-radius: 10px;
+  font-family: var(--font-display);
+  font-size: 14px; font-weight: 700;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  border: none; outline: none;
+  transition: all 0.2s;
+  position: relative; overflow: hidden;
+}
+.ctrl-btn::after {
+  content: '';
+  position: absolute; inset: 0;
+  opacity: 0;
+  background: rgba(255,255,255,0.1);
+  transition: opacity 0.2s;
+}
+.ctrl-btn:hover::after { opacity: 1; }
+.ctrl-btn:active { transform: scale(0.97); }
+
+.btn-scan {
+  background: linear-gradient(135deg, #00d4ff, #0096ff);
+  color: #000;
+  box-shadow: 0 4px 20px rgba(0,212,255,0.3);
+}
+.btn-scan:disabled {
+  opacity: 0.5; cursor: not-allowed;
+  box-shadow: none;
+}
+.btn-reset {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
+  color: var(--text2);
+}
+.btn-impostor {
+  background: rgba(255,77,109,0.12);
+  border: 1px solid rgba(255,77,109,0.25);
+  color: var(--danger);
+}
+
+.ctrl-select-wrap {
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+.ctrl-select-label {
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--text3); letter-spacing: 1px; white-space: nowrap;
+}
+select.ctrl-select {
+  background: transparent; border: none; outline: none;
+  color: var(--text2);
+  font-family: var(--font-mono); font-size: 11px;
+  cursor: pointer;
+  -webkit-appearance: none;
+}
+select.ctrl-select option { background: #0a0f1e; }
+
+/* Log terminal */
+.log-panel {
+  width: 100%; max-width: 1100px;
+  margin-top: 4px;
+}
+.log-body {
+  padding: 12px 16px;
+  height: 100px;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: 11px; line-height: 1.8;
+}
+.log-line { display: flex; gap: 12px; }
+.log-time { color: var(--text3); flex-shrink: 0; }
+.log-msg { color: var(--text2); }
+.log-line.ok .log-msg { color: var(--accent3); }
+.log-line.warn .log-msg { color: #ffd60a; }
+.log-line.err .log-msg { color: var(--danger); }
+.log-line.accent .log-msg { color: var(--accent); }
+
+/* EER comparison mini chart */
+.eer-mini {
+  padding: 14px 20px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.eer-mini-item { text-align: center; }
+.eer-mini-bar-bg {
+  height: 40px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 4px;
+  display: flex; align-items: flex-end;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.eer-mini-bar {
+  width: 100%;
+  border-radius: 4px;
+  transition: height 1.2s cubic-bezier(0.22,1,0.36,1);
+}
+.eer-mini-val {
+  font-family: var(--font-mono); font-size: 11px;
+  font-weight: 700; color: var(--text2);
+}
+.eer-mini-label {
+  font-family: var(--font-mono); font-size: 8px;
+  color: var(--text3); letter-spacing: 0.5px;
+  margin-top: 2px;
+}
+
+/* Particle burst on unlock */
+.particle {
+  position: fixed;
+  pointer-events: none;
+  border-radius: 50%;
+  z-index: 999;
+}
+
+/* Scan line animation on ECG */
+@keyframes ecg-flash { 0%,100%{opacity:1;} 50%{opacity:0.6;} }
+
+/* Responsive */
+@media (max-width: 800px) {
+  .auth-shell { grid-template-columns: 1fr; }
+}
+
+/* Glitch text effect */
+@keyframes glitch1 {
+  0%,100%{clip-path:inset(0 0 95% 0); transform:translate(-2px,0);}
+  50%{clip-path:inset(50% 0 30% 0); transform:translate(2px,0);}
+}
+@keyframes glitch2 {
+  0%,100%{clip-path:inset(80% 0 5% 0); transform:translate(2px,0);}
+  50%{clip-path:inset(10% 0 70% 0); transform:translate(-2px,0);}
+}
+
+/* Unlock ring animation */
+@keyframes ring-expand {
+  0%{transform:scale(0.5);opacity:1;}
+  100%{transform:scale(3);opacity:0;}
+}
+.unlock-ring {
+  position: fixed;
+  width: 200px; height: 200px;
+  border: 2px solid var(--accent3);
+  border-radius: 50%;
+  top: 50%; left: 50%;
+  transform: translate(-50%,-50%);
+  pointer-events: none; z-index: 998;
+  animation: ring-expand 0.8s ease-out forwards;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<div id="cursor"></div>
+<div id="cursor-ring"></div>
+<canvas id="starfield"></canvas>
+<div class="grid-bg"></div>
+
+<div class="app">
+
+  <!-- Header -->
+  <header class="header">
+    <div class="logo">Bio<span>Fusion</span></div>
+    <div class="header-meta">
+      <div class="status-dot"></div>
+      <span>System online</span>
+      <span id="clock">00:00:00</span>
+      <span>PhysioNet DB · 78 subjects</span>
+    </div>
+  </header>
+
+  <!-- Main auth shell -->
+  <div class="auth-shell">
+
+    <!-- LEFT: Biometric scanners -->
+    <div class="panel scanners-panel">
+      <div class="panel-header">
+        <span class="panel-title">Biometric capture</span>
+        <span class="panel-badge" id="capture-badge">Standby</span>
+      </div>
+      <div class="scanner-list">
+
+        <!-- ECG -->
+        <div class="scanner-card" id="sc-ecg">
+          <div class="scanner-top">
+            <div class="scanner-icon-wrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:#00d4ff;">
+                <polyline points="2,12 6,12 7,6 9,18 11,4 13,20 15,9 17,15 18,12 22,12"/>
+              </svg>
+            </div>
+            <div class="scanner-info">
+              <div class="scanner-name">Electrocardiogram</div>
+              <div class="scanner-sub">ECG · P-QRS-T waves · 20 features</div>
+            </div>
+            <div class="scanner-status" id="ecg-status">Idle</div>
+          </div>
+          <div class="scanner-canvas-wrap" id="ecg-wrap">
+            <canvas id="ecg-mini" height="90"></canvas>
+          </div>
+          <div class="scanner-score-bar">
+            <div class="scanner-score-fill" id="ecg-score-fill"></div>
+          </div>
+          <div class="scanner-weight">
+            <span class="weight-label">FT-EER Weight</span>
+            <div class="weight-bar-bg"><div class="weight-bar-fill" id="ecg-wbar" style="width:22%;"></div></div>
+            <span class="weight-val" id="ecg-wval">22%</span>
+          </div>
+        </div>
+
+        <!-- Face -->
+        <div class="scanner-card" id="sc-face">
+          <div class="scanner-top">
+            <div class="scanner-icon-wrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:#7c5cfc;">
+                <circle cx="12" cy="8" r="4"/>
+                <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+                <path d="M8.5 8.5 L8.5 8.5 M15.5 8.5 L15.5 8.5" stroke-linecap="round" stroke-width="2"/>
+                <path d="M9 11.5 Q12 13.5 15 11.5" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div class="scanner-info">
+              <div class="scanner-name">Face Recognition</div>
+              <div class="scanner-sub">NIST-BSSR1 · Eigenface matching</div>
+            </div>
+            <div class="scanner-status" id="face-status">Idle</div>
+          </div>
+          <div class="scanner-canvas-wrap" id="face-wrap">
+            <div class="face-scan-area">
+              <canvas id="face-canvas" width="240" height="90"></canvas>
+            </div>
+          </div>
+          <div class="scanner-score-bar">
+            <div class="scanner-score-fill" id="face-score-fill" style="background: var(--accent2);"></div>
+          </div>
+          <div class="scanner-weight">
+            <span class="weight-label">FT-EER Weight</span>
+            <div class="weight-bar-bg"><div class="weight-bar-fill" id="face-wbar" style="width:43%;"></div></div>
+            <span class="weight-val" id="face-wval">43%</span>
+          </div>
+        </div>
+
+        <!-- Fingerprint -->
+        <div class="scanner-card" id="sc-fp">
+          <div class="scanner-top">
+            <div class="scanner-icon-wrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:#00ff9d;">
+                <path d="M12 2C8.5 2 6 4.5 6 8c0 3 1 5.5 1.5 7M12 2c3.5 0 6 2.5 6 6 0 3-1 5.5-1.5 7M12 2v0M9 9.5C9 7.5 10.3 6 12 6s3 1.5 3 3.5c0 2.5-.8 5-1.2 6.5M12 6v0M10.5 12c0-1 .7-1.8 1.5-1.8s1.5.8 1.5 1.8c0 1.8-.5 4-1.5 6"/>
+              </svg>
+            </div>
+            <div class="scanner-info">
+              <div class="scanner-name">Fingerprint</div>
+              <div class="scanner-sub">NIST Right Index · Minutiae map</div>
+            </div>
+            <div class="scanner-status" id="fp-status">Idle</div>
+          </div>
+          <div class="scanner-canvas-wrap" id="fp-wrap">
+            <canvas id="fp-canvas" width="300" height="90"></canvas>
+            <div class="fp-scan-line" id="fp-scan-line"></div>
+          </div>
+          <div class="scanner-score-bar">
+            <div class="scanner-score-fill" id="fp-score-fill" style="background: var(--accent3);"></div>
+          </div>
+          <div class="scanner-weight">
+            <span class="weight-label">FT-EER Weight</span>
+            <div class="weight-bar-bg"><div class="weight-bar-fill" id="fp-wbar" style="width:35%;"></div></div>
+            <span class="weight-val" id="fp-wval">35%</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- RIGHT: Main panels -->
+    <div class="main-panel">
+
+      <!-- ECG Main Display -->
+      <div class="panel ecg-panel">
+        <div class="panel-header">
+          <span class="panel-title">Live ECG signal — P·Q·R·S·T morphology</span>
+          <span class="panel-badge" id="bpm-badge">72 BPM</span>
+        </div>
+        <div class="ecg-wrap">
+          <canvas id="ecg-main" height="160"></canvas>
+          <div class="ecg-overlay">
+            <div class="ecg-vitals">
+              <div class="vital">
+                <span class="vital-label">Heart Rate</span>
+                <span class="vital-val" id="bpm-val">72</span>
+                <span class="vital-unit">BPM</span>
+              </div>
+              <div class="vital">
+                <span class="vital-label">QRS Width</span>
+                <span class="vital-val" id="qrs-val">80</span>
+                <span class="vital-unit">ms</span>
+              </div>
+              <div class="vital">
+                <span class="vital-label">PR Interval</span>
+                <span class="vital-val" id="pr-val">164</span>
+                <span class="vital-unit">ms</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Feature Vector -->
+      <div class="panel features-panel">
+        <div class="panel-header">
+          <span class="panel-title">Feature vector — 20 ECG biometrics extracted</span>
+          <span class="panel-badge">Interval · Amplitude · Angle</span>
+        </div>
+        <div class="features-grid" id="features-grid"></div>
+      </div>
+
+      <!-- Fusion + Decision -->
+      <div class="panel fusion-panel">
+        <div class="panel-header">
+          <span class="panel-title">Score-level fusion</span>
+          <span class="panel-badge" id="fusion-method-badge">FT-EER</span>
+        </div>
+        <div class="fusion-body">
+
+          <div class="fusion-method-tabs">
+            <div class="fmethod-tab active" onclick="setFusionMethod('fteer',this)">FT-EER weighted</div>
+            <div class="fmethod-tab" onclick="setFusionMethod('ftmsd',this)">FT-MSD weighted</div>
+          </div>
+
+          <div class="score-dials" id="score-dials">
+            <div class="score-dial-wrap" id="dial-ecg">
+              <svg class="score-dial-svg" viewBox="0 0 80 80">
+                <circle cx="40" cy="40" r="32" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="6"/>
+                <circle cx="40" cy="40" r="32" fill="none" stroke="#00d4ff" stroke-width="6"
+                  stroke-dasharray="201" stroke-dashoffset="201" stroke-linecap="round"
+                  transform="rotate(-90 40 40)" id="ecg-arc"/>
+                <text x="40" y="44" text-anchor="middle" font-family="'Space Mono',monospace"
+                  font-size="11" font-weight="700" fill="#e8f0ff" id="ecg-arc-val">—</text>
+              </svg>
+              <div class="dial-label">ECG</div>
+              <div class="dial-score" id="dial-ecg-score">–––</div>
+            </div>
+            <div class="score-dial-wrap" id="dial-face">
+              <svg class="score-dial-svg" viewBox="0 0 80 80">
+                <circle cx="40" cy="40" r="32" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="6"/>
+                <circle cx="40" cy="40" r="32" fill="none" stroke="#7c5cfc" stroke-width="6"
+                  stroke-dasharray="201" stroke-dashoffset="201" stroke-linecap="round"
+                  transform="rotate(-90 40 40)" id="face-arc"/>
+                <text x="40" y="44" text-anchor="middle" font-family="'Space Mono',monospace"
+                  font-size="11" font-weight="700" fill="#e8f0ff" id="face-arc-val">—</text>
+              </svg>
+              <div class="dial-label">Face</div>
+              <div class="dial-score" id="dial-face-score">–––</div>
+            </div>
+            <div class="score-dial-wrap" id="dial-fp">
+              <svg class="score-dial-svg" viewBox="0 0 80 80">
+                <circle cx="40" cy="40" r="32" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="6"/>
+                <circle cx="40" cy="40" r="32" fill="none" stroke="#00ff9d" stroke-width="6"
+                  stroke-dasharray="201" stroke-dashoffset="201" stroke-linecap="round"
+                  transform="rotate(-90 40 40)" id="fp-arc"/>
+                <text x="40" y="44" text-anchor="middle" font-family="'Space Mono',monospace"
+                  font-size="11" font-weight="700" fill="#e8f0ff" id="fp-arc-val">—</text>
+              </svg>
+              <div class="dial-label">Fingerprint</div>
+              <div class="dial-score" id="dial-fp-score">–––</div>
+            </div>
+          </div>
+
+          <div class="fusion-eq" id="fusion-eq">
+            <span class="eq-var">FusedScore</span> = (<span class="eq-var">w</span><sub>ecg</sub> × <span class="eq-val" id="eq-ecg">—</span> + <span class="eq-var">w</span><sub>face</sub> × <span class="eq-val" id="eq-face">—</span> + <span class="eq-var">w</span><sub>fp</sub> × <span class="eq-val" id="eq-fp">—</span>) / Σ<span class="eq-var">w</span>
+            <br>
+            = <span class="eq-val" id="eq-total" style="font-size:15px;">—</span>
+            &nbsp;·&nbsp; Threshold: <span style="color:var(--text3);">0.55</span>
+            &nbsp;·&nbsp; EER: <span class="eq-val" id="eq-eer">—</span>
+          </div>
+
+          <div class="decision-zone" id="decision-zone">
+            <div class="decision-inner">
+              <div class="decision-icon" id="decision-icon">🔒</div>
+              <div class="decision-text">
+                <div class="decision-heading" id="decision-heading">Awaiting capture</div>
+                <div class="decision-sub" id="decision-sub">Press AUTHENTICATE to begin biometric verification sequence</div>
+              </div>
+              <div class="decision-meta">
+                <div id="decision-method-label" style="margin-bottom:4px;">Method: —</div>
+                <div class="meta-eer" id="decision-eer">EER: —</div>
+                <div style="margin-top:4px;" id="decision-modalities">Modalities: 3 active</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- EER mini comparison -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">EER comparison — unimodal vs fusion</span>
+          <span class="panel-badge">Lower is better</span>
+        </div>
+        <div class="eer-mini" id="eer-mini"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls-row" style="margin-top:20px;">
+    <button class="ctrl-btn btn-scan" id="btn-auth" onclick="startAuth()">⚡ Authenticate</button>
+    <button class="ctrl-btn btn-impostor" onclick="startImpostor()">⚠ Simulate Impostor</button>
+    <button class="ctrl-btn btn-reset" onclick="resetAll()">↺ Reset</button>
+
+    <div class="ctrl-select-wrap">
+      <span class="ctrl-select-label">Subject:</span>
+      <select class="ctrl-select" id="subject-sel">
+        <option value="0">Subject A — enrolled</option>
+        <option value="1">Subject B — enrolled</option>
+        <option value="2">Subject C — enrolled</option>
+      </select>
+    </div>
+
+    <div class="ctrl-select-wrap">
+      <span class="ctrl-select-label">Biometrics:</span>
+      <select class="ctrl-select" id="modality-sel">
+        <option value="all">ECG + Face + FP</option>
+        <option value="ecg-face">ECG + Face</option>
+        <option value="ecg-fp">ECG + FP</option>
+        <option value="ecg">ECG only</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Log terminal -->
+  <div class="panel log-panel" style="margin-top:12px;">
+    <div class="panel-header" style="padding: 10px 16px;">
+      <span class="panel-title">System log</span>
+      <span style="font-family:var(--font-mono);font-size:10px;color:var(--text3);">TERMINAL</span>
+    </div>
+    <div class="log-body" id="log-body"></div>
+  </div>
+
+</div>
+
+<script>
+// ——— Cursor ———
+const cur = document.getElementById('cursor');
+const curRing = document.getElementById('cursor-ring');
+let mx = 0, my = 0, rx = 0, ry = 0;
+document.addEventListener('mousemove', e => { mx = e.clientX; my = e.clientY; });
+(function animCursor() {
+  rx += (mx - rx) * 0.15; ry += (my - ry) * 0.15;
+  cur.style.transform = `translate(${mx-4}px, ${my-4}px)`;
+  curRing.style.transform = `translate(${rx-14}px, ${ry-14}px)`;
+  requestAnimationFrame(animCursor);
+})();
+
+// ——— Clock ———
+function tick() {
+  const n = new Date();
+  document.getElementById('clock').textContent =
+    String(n.getHours()).padStart(2,'0') + ':' +
+    String(n.getMinutes()).padStart(2,'0') + ':' +
+    String(n.getSeconds()).padStart(2,'0');
+}
+tick(); setInterval(tick, 1000);
+
+// ——— Starfield ———
+const starCanvas = document.getElementById('starfield');
+const starCtx = starCanvas.getContext('2d');
+function resizeStar() { starCanvas.width = window.innerWidth; starCanvas.height = window.innerHeight; }
+resizeStar(); window.addEventListener('resize', resizeStar);
+const STARS = Array.from({length:160}, () => ({
+  x: Math.random(), y: Math.random(),
+  r: Math.random()*1.2+0.2, speed: Math.random()*0.0002+0.00005,
+  opacity: Math.random()*0.5+0.1
+}));
+function drawStars() {
+  starCtx.clearRect(0,0,starCanvas.width,starCanvas.height);
+  STARS.forEach(s => {
+    s.y += s.speed; if (s.y > 1) s.y = 0;
+    starCtx.beginPath();
+    starCtx.arc(s.x*starCanvas.width, s.y*starCanvas.height, s.r, 0, Math.PI*2);
+    starCtx.fillStyle = `rgba(200,220,255,${s.opacity})`;
+    starCtx.fill();
+  });
+  requestAnimationFrame(drawStars);
+}
+drawStars();
+
+// ——— Subjects ———
+const SUBJECTS = [
+  { bpm:72, qrs:80, pr:164, ecgSeed:1.2, pA:0.15,qA:-0.20,rA:1.0,sA:-0.35,tA:0.25,qw:0.07, genuineScores:{ecg:0.79,face:0.83,fp:0.91} },
+  { bpm:68, qrs:86, pr:158, ecgSeed:2.5, pA:0.12,qA:-0.15,rA:0.85,sA:-0.28,tA:0.30,qw:0.09, genuineScores:{ecg:0.76,face:0.80,fp:0.88} },
+  { bpm:76, qrs:74, pr:172, ecgSeed:3.8, pA:0.18,qA:-0.25,rA:1.1,sA:-0.40,tA:0.20,qw:0.06, genuineScores:{ecg:0.82,face:0.85,fp:0.93} },
+];
+const IMPOSTOR = { bpm:80, qrs:92, pr:150, ecgSeed:7.7, pA:0.08,qA:-0.10,rA:0.60,sA:-0.18,tA:0.38,qw:0.11, genuineScores:{ecg:0.22,face:0.31,fp:0.18} };
+
+let currentSubject = SUBJECTS[0];
+let fusionMethod = 'fteer';
+let isImpostor = false;
+
+document.getElementById('subject-sel').addEventListener('change', e => {
+  currentSubject = SUBJECTS[parseInt(e.target.value)];
+  isImpostor = false;
+  updateECGVitals(currentSubject);
+});
+
+// ——— Log ———
+function log(msg, type='') {
+  const lb = document.getElementById('log-body');
+  const now = new Date();
+  const t = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+':'+String(now.getSeconds()).padStart(2,'0')+'.'+String(now.getMilliseconds()).padStart(3,'0').slice(0,2);
+  const line = document.createElement('div');
+  line.className = 'log-line ' + type;
+  line.innerHTML = `<span class="log-time">[${t}]</span><span class="log-msg">${msg}</span>`;
+  lb.appendChild(line);
+  lb.scrollTop = lb.scrollHeight;
+}
+
+// ——— ECG Drawing ———
+function seededRand(seed) {
+  let s = seed * 9301 + 49297;
+  return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+}
+
+function ecgSample(t, subj) {
+  let v = 0;
+  v += subj.pA * Math.exp(-((t+0.28)**2)/0.0012);
+  v += subj.qA * Math.exp(-((t+0.10)**2)/0.00015);
+  v += subj.rA * Math.exp(-(t*t)/(subj.qw*0.001));
+  v += subj.sA * Math.exp(-((t-0.09)**2)/0.00015);
+  v += subj.tA * Math.exp(-((t-0.30)**2)/0.003);
+  return v;
+}
+
+// Main ECG canvas — scrolling
+let ecgPhase = 0;
+const mainECGCanvas = document.getElementById('ecg-main');
+const mainECGCtx = mainECGCanvas.getContext('2d');
+
+function resizeMainECG() {
+  mainECGCanvas.width = mainECGCanvas.offsetWidth * 2;
+  mainECGCanvas.height = 320;
+}
+resizeMainECG(); window.addEventListener('resize', resizeMainECG);
+
+function drawMainECG() {
+  const W = mainECGCanvas.width, H = mainECGCanvas.height;
+  const ctx = mainECGCtx;
+  ctx.clearRect(0,0,W,H);
+
+  // Grid
+  ctx.strokeStyle='rgba(0,212,255,0.06)'; ctx.lineWidth=1;
+  for(let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=20){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+
+  // ECG trace
+  ctx.beginPath(); ctx.strokeStyle='#00d4ff'; ctx.lineWidth=2; ctx.lineJoin='round';
+  const subj = currentSubject;
+  const period = W * 0.45;
+  const baseline = H * 0.62;
+  const scale = H * 0.38;
+  const rand = seededRand(subj.ecgSeed * 77 + ecgPhase * 0.001);
+
+  for(let px=0; px<W; px++) {
+    const phase = ((px - ecgPhase) % period + period) % period;
+    const t = (phase/period - 0.45) * 0.8;
+    let v = ecgSample(t, subj);
+    v += (rand()-0.5) * 0.02;
+    const y = baseline - v * scale;
+    if(px===0) ctx.moveTo(px,y); else ctx.lineTo(px,y);
+  }
+  ctx.stroke();
+
+  // Glow
+  ctx.shadowBlur=0;
+
+  ecgPhase = (ecgPhase + 2.5) % (W * 10);
+  requestAnimationFrame(drawMainECG);
+}
+drawMainECG();
+
+// Mini ECG (in scanner card)
+function drawMiniECG(canvas, subj, color) {
+  canvas.width = canvas.offsetWidth * 2 || 600;
+  canvas.height = 180;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle = color || '#00d4ff';
+  ctx.lineWidth = 2; ctx.lineJoin='round';
+  const period = W * 0.5;
+  const baseline = H * 0.62;
+  const scale = H * 0.35;
+
+  ctx.beginPath();
+  for(let px=0;px<W;px++) {
+    const phase = (px % period);
+    const t = (phase/period - 0.45) * 0.8;
+    let v = ecgSample(t, subj);
+    const y = baseline - v * scale;
+    if(px===0) ctx.moveTo(px,y); else ctx.lineTo(px,y);
+  }
+  ctx.stroke();
+}
+
+// Face canvas — draw landmark mesh
+function drawFaceScan(canvas, progress) {
+  canvas.width = canvas.offsetWidth * 2 || 480;
+  canvas.height = 180;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0,0,W,H);
+  const cx = W/2, cy = H/2;
+
+  // Face outline
+  ctx.strokeStyle = `rgba(124,92,252,${0.4 * progress})`;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy*0.9, W*0.18, H*0.38, 0, 0, Math.PI*2);
+  ctx.stroke();
+
+  // Landmark points
+  const pts = [
+    [cx, cy*0.45], // top head
+    [cx-W*0.14, cy*0.75], [cx+W*0.14, cy*0.75], // cheeks
+    [cx-W*0.08, cy*0.82], [cx+W*0.08, cy*0.82], // eyes
+    [cx, cy*1.0], // nose
+    [cx-W*0.06, cy*1.15], [cx+W*0.06, cy*1.15], // mouth
+    [cx, cy*1.3], // chin
+    [cx-W*0.16, cy*0.95], [cx+W*0.16, cy*0.95], // ears
+  ];
+
+  const visible = Math.floor(pts.length * progress);
+  pts.slice(0, visible).forEach(([x,y]) => {
+    ctx.beginPath();
+    ctx.arc(x, y, 3, 0, Math.PI*2);
+    ctx.fillStyle = `rgba(124,92,252,0.8)`;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x, y, 6, 0, Math.PI*2);
+    ctx.strokeStyle = `rgba(124,92,252,0.3)`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  });
+
+  // Connecting mesh
+  if(progress > 0.4) {
+    const connections = [[0,1],[0,2],[1,3],[2,4],[3,5],[4,5],[5,6],[5,7],[6,7],[6,8],[7,8],[1,9],[2,10]];
+    ctx.strokeStyle = `rgba(124,92,252,${0.2 * progress})`;
+    ctx.lineWidth = 0.5;
+    connections.forEach(([a,b]) => {
+      if(a < visible && b < visible) {
+        ctx.beginPath();
+        ctx.moveTo(pts[a][0],pts[a][1]);
+        ctx.lineTo(pts[b][0],pts[b][1]);
+        ctx.stroke();
+      }
+    });
+  }
+
+  // Scan lines
+  if(progress < 1) {
+    const scanY = H * progress;
+    ctx.fillStyle = `rgba(124,92,252,0.08)`;
+    ctx.fillRect(0, scanY-20, W, 20);
+    ctx.strokeStyle = `rgba(124,92,252,0.4)`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, scanY); ctx.lineTo(W, scanY);
+    ctx.stroke();
+  }
+}
+
+// Fingerprint canvas
+function drawFP(canvas, progress) {
+  canvas.width = canvas.offsetWidth * 2 || 600;
+  canvas.height = 180;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0,0,W,H);
+
+  const cx = W/2, cy = H/2;
+  const maxR = Math.min(W,H)*0.38;
+  const rings = 10;
+  const alpha = progress * 0.5;
+
+  for(let i=1;i<=rings;i++) {
+    const r = (i/rings)*maxR;
+    const t = (i/rings) * Math.PI*0.15;
+    ctx.beginPath();
+    // Elliptical fingerprint ridge
+    for(let a=0;a<Math.PI*2;a+=0.05) {
+      const rx = r * (1 + 0.18*Math.sin(3*a));
+      const ry = r * 0.7 * (1 + 0.1*Math.cos(2*a));
+      const x = cx + rx * Math.cos(a+t);
+      const y = cy + ry * Math.sin(a+t);
+      if(a===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.closePath();
+    ctx.strokeStyle = `rgba(0,255,157,${alpha*(1-i/rings*0.5)})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  // Minutiae dots
+  if(progress > 0.3) {
+    const rand = seededRand(42);
+    for(let i=0;i<20;i++) {
+      const r = rand()*maxR*0.9 + maxR*0.1;
+      const a = rand()*Math.PI*2;
+      const x = cx + r*Math.cos(a);
+      const y = cy*0.9 + r*0.7*Math.sin(a);
+      if(i < Math.floor(20*progress)) {
+        ctx.beginPath();
+        ctx.arc(x, y, 2.5, 0, Math.PI*2);
+        ctx.fillStyle = `rgba(0,255,157,0.8)`;
+        ctx.fill();
+      }
+    }
+  }
+}
+
+// ——— Features grid ———
+const FEATURE_NAMES = [
+  'PRI','PRS','QTCI','STS','STI',
+  'RPL','RP','RPR','RQ','RS',
+  'RTL','RTR','RR','RQA','RSA',
+  'RPA','RTA','∠Q','∠R','∠S'
+];
+const FEAT_COLORS = [...Array(13).fill('#00d4ff'), ...Array(4).fill('#7c5cfc'), ...Array(3).fill('#00ff9d')];
+
+function buildFeaturesGrid() {
+  const grid = document.getElementById('features-grid');
+  grid.innerHTML = '';
+  FEATURE_NAMES.forEach((name, i) => {
+    const cell = document.createElement('div');
+    cell.className = 'feat-cell';
+    cell.id = 'fc-'+i;
+    cell.innerHTML = `<span class="feat-name">${name}</span><span class="feat-val" id="fv-${i}" style="color:${FEAT_COLORS[i]}40">—</span>`;
+    grid.appendChild(cell);
+  });
+}
+buildFeaturesGrid();
+
+function animateFeatures(subj) {
+  const rand = seededRand(subj.ecgSeed * 333);
+  FEATURE_NAMES.forEach((_, i) => {
+    setTimeout(() => {
+      const val = (0.2 + rand() * 0.75).toFixed(3);
+      const cell = document.getElementById('fc-'+i);
+      const fv = document.getElementById('fv-'+i);
+      if(cell) cell.classList.add('lit');
+      if(fv) { fv.textContent = val; fv.style.color = FEAT_COLORS[i]; }
+    }, i * 60 + 200);
+  });
+}
+
+function resetFeatures() {
+  FEATURE_NAMES.forEach((_,i) => {
+    const cell = document.getElementById('fc-'+i);
+    const fv = document.getElementById('fv-'+i);
+    if(cell) cell.classList.remove('lit');
+    if(fv) { fv.textContent = '—'; fv.style.color = FEAT_COLORS[i]+'40'; }
+  });
+}
+
+// ——— EER mini chart ———
+const EER_DATA = [
+  {l:'ECG only', v:10.80, c:'#AFA9EC'},
+  {l:'Face only', v:4.52, c:'#7c5cfc'},
+  {l:'FP only', v:2.12, c:'#00ff9d'},
+  {l:'Full fusion', v:0.22, c:'#00d4ff', highlight:true},
+];
+function buildEERMini() {
+  const cont = document.getElementById('eer-mini');
+  cont.innerHTML = '';
+  const max = 12;
+  EER_DATA.forEach(d => {
+    const pct = (d.v / max * 100).toFixed(0);
+    const item = document.createElement('div');
+    item.className = 'eer-mini-item';
+    item.innerHTML = `
+      <div class="eer-mini-bar-bg">
+        <div class="eer-mini-bar" style="height:${pct}%;background:${d.c};${d.highlight?'box-shadow:0 0 10px '+d.c+';':''}"></div>
+      </div>
+      <div class="eer-mini-val" style="color:${d.c}">${d.v}%</div>
+      <div class="eer-mini-label">${d.l}</div>
+    `;
+    cont.appendChild(item);
+  });
+}
+buildEERMini();
+
+// ——— Dial arc animation ———
+function setDial(id, value) {
+  const circumference = 201;
+  const offset = circumference * (1 - value);
+  const arc = document.getElementById(id+'-arc');
+  const arcVal = document.getElementById(id+'-arc-val');
+  const dialScore = document.getElementById('dial-'+id+'-score');
+  if(arc) {
+    arc.style.transition = 'stroke-dashoffset 1.2s cubic-bezier(0.22,1,0.36,1)';
+    arc.style.strokeDashoffset = offset;
+  }
+  if(arcVal) arcVal.textContent = (value*100).toFixed(0);
+  if(dialScore) {
+    dialScore.textContent = value.toFixed(3);
+    if(value > 0.55) { dialScore.style.color = 'var(--accent3)'; }
+    else { dialScore.style.color = 'var(--danger)'; }
+  }
+}
+
+function resetDial(id) {
+  const arc = document.getElementById(id+'-arc');
+  const arcVal = document.getElementById(id+'-arc-val');
+  const dialScore = document.getElementById('dial-'+id+'-score');
+  if(arc) arc.style.strokeDashoffset = '201';
+  if(arcVal) arcVal.textContent = '—';
+  if(dialScore) { dialScore.textContent = '–––'; dialScore.style.color = ''; }
+}
+
+// ——— Fusion method ———
+const WEIGHTS = {
+  fteer: { ecg:0.22, face:0.43, fp:0.35, eer:'0.22%' },
+  ftmsd: { ecg:0.20, face:0.40, fp:0.40, eer:'0.98%' },
+};
+
+function setFusionMethod(method, el) {
+  fusionMethod = method;
+  document.querySelectorAll('.fmethod-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('fusion-method-badge').textContent = method === 'fteer' ? 'FT-EER' : 'FT-MSD';
+  updateWeightDisplay();
+  log(`Fusion method switched to ${method.toUpperCase()}`, 'accent');
+}
+
+function updateWeightDisplay() {
+  const W = WEIGHTS[fusionMethod];
+  document.getElementById('ecg-wbar').style.width = (W.ecg*100)+'%';
+  document.getElementById('ecg-wval').textContent = (W.ecg*100).toFixed(0)+'%';
+  document.getElementById('face-wbar').style.width = (W.face*100)+'%';
+  document.getElementById('face-wval').textContent = (W.face*100).toFixed(0)+'%';
+  document.getElementById('fp-wbar').style.width = (W.fp*100)+'%';
+  document.getElementById('fp-wval').textContent = (W.fp*100).toFixed(0)+'%';
+}
+updateWeightDisplay();
+
+// ——— ECG vitals ———
+function updateECGVitals(subj) {
+  document.getElementById('bpm-val').textContent = subj.bpm;
+  document.getElementById('bpm-badge').textContent = subj.bpm + ' BPM';
+  document.getElementById('qrs-val').textContent = subj.qrs;
+  document.getElementById('pr-val').textContent = subj.pr;
+}
+updateECGVitals(SUBJECTS[0]);
+
+// ——— Particles ———
+function spawnParticles(granted) {
+  const color = granted ? '#00ff9d' : '#ff4d6d';
+  for(let i=0;i<30;i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    const size = Math.random()*6+3;
+    p.style.cssText = `width:${size}px;height:${size}px;background:${color};left:50%;top:50%;`;
+    document.body.appendChild(p);
+    const angle = Math.random()*Math.PI*2;
+    const dist = Math.random()*300+100;
+    const dx = Math.cos(angle)*dist;
+    const dy = Math.sin(angle)*dist;
+    p.animate([
+      {transform:`translate(-50%,-50%) translate(0,0)`, opacity:1},
+      {transform:`translate(-50%,-50%) translate(${dx}px,${dy}px)`, opacity:0}
+    ], { duration: 800 + Math.random()*400, easing:'cubic-bezier(0,0,0.3,1)' }).onfinish = () => p.remove();
+  }
+  if(granted) {
+    const ring = document.createElement('div');
+    ring.className = 'unlock-ring';
+    document.body.appendChild(ring);
+    setTimeout(() => ring.remove(), 900);
+  }
+}
+
+// ——— Scanner card control ———
+function setScannerState(id, state, msg) {
+  const card = document.getElementById('sc-'+id);
+  const status = document.getElementById(id+'-status');
+  ['scanning','verified','failed'].forEach(c => card.classList.remove(c));
+  if(state) card.classList.add(state);
+  if(status) status.textContent = msg;
+}
+
+// ——— Main auth flow ———
+let authRunning = false;
+
+function startAuth(impostor=false) {
+  if(authRunning) return;
+  authRunning = true;
+  isImpostor = impostor;
+  const subj = impostor ? IMPOSTOR : currentSubject;
+  const modalitySel = document.getElementById('modality-sel').value;
+
+  const useECG = true;
+  const useFace = modalitySel === 'all' || modalitySel === 'ecg-face';
+  const useFP = modalitySel === 'all' || modalitySel === 'ecg-fp';
+
+  document.getElementById('btn-auth').disabled = true;
+  document.getElementById('capture-badge').textContent = 'Scanning...';
+  document.getElementById('capture-badge').style.color = 'var(--accent)';
+
+  log('═══ BioFusion Authentication Initiated ═══', 'accent');
+  log(`Subject: ${impostor ? 'UNKNOWN (impostor simulation)' : 'Enrolled user'} · Method: ${fusionMethod.toUpperCase()}`);
+  log(`Modalities active: ECG${useFace?' + Face':''}${useFP?' + Fingerprint':''}`);
+
+  // Reset
+  resetDial('ecg'); resetDial('face'); resetDial('fp');
+  setScannerState('ecg','','Idle');
+  setScannerState('face','','Idle');
+  setScannerState('fp','','Idle');
+  document.getElementById('ecg-score-fill').style.width = '0%';
+  document.getElementById('face-score-fill').style.width = '0%';
+  document.getElementById('fp-score-fill').style.width = '0%';
+  document.getElementById('eq-ecg').textContent = '—';
+  document.getElementById('eq-face').textContent = '—';
+  document.getElementById('eq-fp').textContent = '—';
+  document.getElementById('eq-total').textContent = '—';
+  document.getElementById('eq-eer').textContent = '—';
+  const dz = document.getElementById('decision-zone');
+  dz.classList.remove('access-granted','access-denied');
+  document.getElementById('decision-heading').textContent = 'Scanning...';
+  document.getElementById('decision-sub').textContent = 'Capturing biometric signals...';
+  document.getElementById('decision-icon').textContent = '🔍';
+
+  const jitter = () => (Math.random()-0.5)*0.06;
+  const ecgScore = Math.min(1, Math.max(0, subj.genuineScores.ecg + jitter()));
+  const faceScore = Math.min(1, Math.max(0, subj.genuineScores.face + jitter()));
+  const fpScore = Math.min(1, Math.max(0, subj.genuineScores.fp + jitter()));
+
+  // PHASE 1: ECG (0ms)
+  setTimeout(() => {
+    log('↗ ECG acquisition started — PhysioNet signal stream active', 'accent');
+    setScannerState('ecg', 'scanning', 'Scanning');
+    updateECGVitals(subj);
+    const miniCanvas = document.getElementById('ecg-mini');
+    drawMiniECG(miniCanvas, subj, '#00d4ff');
+    resetFeatures();
+  }, 100);
+
+  setTimeout(() => {
+    log('⊞ Extracting 20 ECG features (interval · amplitude · angle)');
+    animateFeatures(subj);
+  }, 800);
+
+  setTimeout(() => {
+    log(`✓ ECG verified — similarity score: ${ecgScore.toFixed(3)}`, 'ok');
+    setScannerState('ecg', 'verified', 'Verified');
+    document.getElementById('ecg-score-fill').style.width = (ecgScore*100)+'%';
+    setDial('ecg', ecgScore);
+    document.getElementById('eq-ecg').textContent = ecgScore.toFixed(3);
+  }, 2000);
+
+  // PHASE 2: Face (2.4s)
+  setTimeout(() => {
+    if(!useFace) { document.getElementById('eq-face').textContent = 'N/A'; return; }
+    log('↗ Face recognition initiated — NIST-BSSR1 eigenface matching', 'accent');
+    setScannerState('face', 'scanning', 'Scanning');
+    let fp = 0;
+    const faceCanvas = document.getElementById('face-canvas');
+    const faceInt = setInterval(() => {
+      fp = Math.min(fp+0.06, 1);
+      drawFaceScan(faceCanvas, fp);
+      if(fp >= 1) clearInterval(faceInt);
+    }, 50);
+  }, 2400);
+
+  setTimeout(() => {
+    if(!useFace) return;
+    log(`✓ Face recognized — eigenface distance score: ${faceScore.toFixed(3)}`, 'ok');
+    setScannerState('face', 'verified', 'Verified');
+    document.getElementById('face-score-fill').style.width = (faceScore*100)+'%';
+    setDial('face', faceScore);
+    document.getElementById('eq-face').textContent = faceScore.toFixed(3);
+  }, 4000);
+
+  // PHASE 3: Fingerprint (4.3s)
+  setTimeout(() => {
+    if(!useFP) { document.getElementById('eq-fp').textContent = 'N/A'; return; }
+    log('↗ Fingerprint scanner active — NIST right index minutiae extraction', 'accent');
+    setScannerState('fp', 'scanning', 'Scanning');
+    let p = 0;
+    const fpCanvas = document.getElementById('fp-canvas');
+    const fpInt = setInterval(() => {
+      p = Math.min(p+0.04, 1);
+      drawFP(fpCanvas, p);
+      if(p >= 1) clearInterval(fpInt);
+    }, 50);
+  }, 4300);
+
+  setTimeout(() => {
+    if(!useFP) return;
+    log(`✓ Fingerprint matched — minutiae score: ${fpScore.toFixed(3)}`, 'ok');
+    setScannerState('fp', 'verified', 'Verified');
+    document.getElementById('fp-score-fill').style.width = (fpScore*100)+'%';
+    setDial('fp', fpScore);
+    document.getElementById('eq-fp').textContent = fpScore.toFixed(3);
+  }, 5800);
+
+  // PHASE 4: Fusion (6.2s)
+  setTimeout(() => {
+    log('⚡ Computing weighted score fusion...', 'accent');
+    const W = WEIGHTS[fusionMethod];
+    let wsum = 0, wtotal = 0;
+    if(useECG) { wsum += ecgScore * W.ecg; wtotal += W.ecg; }
+    if(useFace) { wsum += faceScore * W.face; wtotal += W.face; }
+    if(useFP) { wsum += fpScore * W.fp; wtotal += W.fp; }
+    const fused = wsum / wtotal;
+    const threshold = 0.55;
+    const granted = fused >= threshold;
+
+    document.getElementById('eq-total').textContent = fused.toFixed(4);
+    document.getElementById('eq-eer').textContent = W.eer;
+    document.getElementById('decision-method-label').textContent = `Method: ${fusionMethod.toUpperCase()}`;
+    document.getElementById('decision-eer').textContent = `EER: ${W.eer}`;
+    document.getElementById('decision-modalities').textContent = `Active: ${[useECG&&'ECG',useFace&&'Face',useFP&&'FP'].filter(Boolean).join('+')}`;
+
+    log(`Fused score: ${fused.toFixed(4)} · Threshold: ${threshold} · Decision: ${granted?'GRANT':'DENY'}`);
+
+    if(granted) {
+      dz.classList.add('access-granted');
+      document.getElementById('decision-icon').textContent = '✓';
+      document.getElementById('decision-heading').textContent = 'Access granted';
+      document.getElementById('decision-sub').textContent = `Liveness confirmed via ECG · Score ${fused.toFixed(3)} exceeds threshold 0.55`;
+      log('══ ACCESS GRANTED — identity verified, liveness confirmed ══', 'ok');
+      spawnParticles(true);
+    } else {
+      dz.classList.add('access-denied');
+      document.getElementById('decision-icon').textContent = '✗';
+      document.getElementById('decision-heading').textContent = 'Access denied';
+      document.getElementById('decision-sub').textContent = `Score ${fused.toFixed(3)} below threshold 0.55 · Impostor detected`;
+      log('══ ACCESS DENIED — impostor detected, authentication failed ══', 'err');
+      spawnParticles(false);
+    }
+
+    document.getElementById('capture-badge').textContent = granted ? 'Verified' : 'Rejected';
+    document.getElementById('capture-badge').style.color = granted ? 'var(--accent3)' : 'var(--danger)';
+    document.getElementById('btn-auth').disabled = false;
+    authRunning = false;
+  }, 6200);
+}
+
+function startImpostor() { startAuth(true); }
+
+function resetAll() {
+  authRunning = false;
+  isImpostor = false;
+  resetDial('ecg'); resetDial('face'); resetDial('fp');
+  resetFeatures();
+  setScannerState('ecg','','Idle');
+  setScannerState('face','','Idle');
+  setScannerState('fp','','Idle');
+  ['ecg','face','fp'].forEach(id => {
+    document.getElementById(id+'-score-fill').style.width = '0%';
+  });
+  document.getElementById('eq-ecg').textContent='—';
+  document.getElementById('eq-face').textContent='—';
+  document.getElementById('eq-fp').textContent='—';
+  document.getElementById('eq-total').textContent='—';
+  document.getElementById('eq-eer').textContent='—';
+  const dz = document.getElementById('decision-zone');
+  dz.classList.remove('access-granted','access-denied');
+  document.getElementById('decision-heading').textContent = 'Awaiting capture';
+  document.getElementById('decision-sub').textContent = 'Press AUTHENTICATE to begin biometric verification sequence';
+  document.getElementById('decision-icon').textContent = '🔒';
+  document.getElementById('capture-badge').textContent = 'Standby';
+  document.getElementById('capture-badge').style.color = '';
+  document.getElementById('btn-auth').disabled = false;
+  // Reset face/fp canvases
+  const fc = document.getElementById('face-canvas');
+  const fpc = document.getElementById('fp-canvas');
+  if(fc) { fc.getContext('2d').clearRect(0,0,fc.width,fc.height); }
+  if(fpc) { fpc.getContext('2d').clearRect(0,0,fpc.width,fpc.height); }
+  log('System reset — ready for new authentication session');
+  currentSubject = SUBJECTS[parseInt(document.getElementById('subject-sel').value)];
+  updateECGVitals(currentSubject);
+}
+
+// Init log
+log('BioFusion v2.4 online — ECG multibiometric authentication system');
+log('Database: PhysioNet ECG (78 subjects) + NIST-BSSR1 (face + fingerprint)');
+log('Available modalities: ECG · Face Recognition · Fingerprint · Score fusion');
+</script>
+</body>
+</html>
